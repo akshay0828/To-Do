@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pinboard — task notes stored in an Excel file on GitHub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --wood-1:#3A2A1E; --wood-2:#4E3826; --wood-3:#2A1E15;
+    --cork:#C39A6B;
+    --steel-1:#E8ECEF; --steel-2:#8D989F; --steel-3:#5A646B;
+    --ink:#2E2A24; --paper-line:rgba(70,90,120,.18);
+    --p1:#FCEB7E; --p2:#FBB6AE; --p3:#AFE2BE; --p4:#A9CDEF; --p5:#D9BEEE; --p6:#FBCB92;
+    --ui-text:#EFEAE1; --ui-dim:#A99B87; --accent:#C9A227;
+  }
+  *{box-sizing:border-box}
+  /* Author display rules beat the browser's [hidden] rule, so state it explicitly.
+     Without this, anything with both `hidden` and a `display` value stays visible. */
+  [hidden]{display:none !important}
+  html,body{margin:0;min-height:100%}
+  body{
+    font-family:'Inter',system-ui,sans-serif;color:var(--ui-text);
+    background-color:var(--wood-1);
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='w'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.02 0.6' numOctaves='4' seed='7'/%3E%3C/filter%3E%3Crect width='400' height='400' filter='url(%23w)' opacity='0.5'/%3E%3C/svg%3E"),
+      linear-gradient(105deg, var(--wood-3) 0%, var(--wood-2) 38%, var(--wood-1) 62%, var(--wood-3) 100%);
+    background-blend-mode:soft-light, normal;
+  }
+  header{position:sticky;top:0;z-index:40;
+    background:linear-gradient(180deg, rgba(24,17,12,.96), rgba(18,13,9,.93));
+    border-bottom:1px solid rgba(0,0,0,.7);
+    box-shadow:0 1px 0 rgba(201,162,39,.22), 0 10px 26px rgba(0,0,0,.45);backdrop-filter:blur(6px)}
+  .bar{max-width:1320px;margin:0 auto;padding:13px 22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .mark{display:flex;align-items:center;gap:11px}
+  .mark svg{width:26px;height:26px;flex:none}
+  .mark h1{font-size:15px;font-weight:600;margin:0;color:#F5F1E8}
+  .mark p{margin:1px 0 0;font-family:'Roboto Mono',monospace;font-size:9.5px;
+    letter-spacing:.15em;text-transform:uppercase;color:var(--ui-dim)}
+  .spacer{flex:1}
+  .plate{display:flex;align-items:center;gap:9px;padding:7px 12px;border-radius:3px;
+    background:linear-gradient(180deg,#4B535A,#333A40 55%,#272D32);border:1px solid #1B2024;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.16), inset 0 -1px 0 rgba(0,0,0,.5), 0 1px 2px rgba(0,0,0,.5)}
+  .led{width:8px;height:8px;border-radius:50%;flex:none;background:#4A5257;box-shadow:inset 0 1px 1px rgba(0,0,0,.6)}
+  .led.live{background:#7BD88F;box-shadow:0 0 7px rgba(123,216,143,.75), inset 0 1px 1px rgba(255,255,255,.4)}
+  .led.busy{background:var(--accent);box-shadow:0 0 7px rgba(201,162,39,.8);animation:blink .85s infinite}
+  .led.err{background:#E0645A;box-shadow:0 0 7px rgba(224,100,90,.8)}
+  @keyframes blink{50%{opacity:.3}}
+  .plate .txt{font-family:'Roboto Mono',monospace;font-size:9.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:#9BA5AC;line-height:1.35}
+  .plate .txt b{display:block;font-weight:500;font-size:10.5px;letter-spacing:.02em;text-transform:none;
+    color:#E6ECF0;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  button{font-family:inherit;cursor:pointer;transition:.15s}
+  .btn{display:inline-flex;align-items:center;gap:7px;
+    background:linear-gradient(180deg,#3B322A,#2A231C);color:#E7E0D4;border:1px solid #16110D;
+    border-radius:3px;padding:8px 13px;font-size:12.5px;font-weight:500;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.09), 0 1px 2px rgba(0,0,0,.4)}
+  .btn:hover{background:linear-gradient(180deg,#4A3F34,#332B22);color:#fff}
+  .btn:active{box-shadow:inset 0 2px 4px rgba(0,0,0,.5);transform:translateY(1px)}
+  .btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.7}
+  .btn.primary{background:linear-gradient(180deg,#D9B23C,#B08A1E);color:#2A2008;border-color:#7A5F12;font-weight:600;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.4), 0 1px 3px rgba(0,0,0,.45)}
+  .btn.primary:hover{background:linear-gradient(180deg,#E6C053,#BE9626)}
+  .btn[disabled]{opacity:.5;cursor:not-allowed}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  .stage{max-width:1320px;margin:0 auto;padding:26px 22px 70px}
+  .frame{padding:14px;border-radius:5px;
+    background:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.03 0.9' numOctaves='3' seed='3'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23f)' opacity='0.45'/%3E%3C/svg%3E"),
+      linear-gradient(160deg,#7A5636,#4A3320 40%,#66452B 70%,#3E2B1B);
+    background-blend-mode:soft-light,normal;
+    box-shadow:inset 0 1px 0 rgba(255,220,170,.22), inset 0 -2px 3px rgba(0,0,0,.55), 0 22px 44px -14px rgba(0,0,0,.7)}
+  .cork{position:relative;border-radius:2px;padding:38px 30px 44px;min-height:520px;
+    background-color:var(--cork);
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='c'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='4' seed='11'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23c)' opacity='0.9'/%3E%3C/svg%3E"),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='340' height='340'%3E%3Cfilter id='b'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.12' numOctaves='3' seed='5'/%3E%3C/filter%3E%3Crect width='340' height='340' filter='url(%23b)' opacity='0.55'/%3E%3C/svg%3E"),
+      radial-gradient(120% 90% at 30% 8%, rgba(255,236,205,.30), transparent 62%);
+    background-blend-mode:multiply, soft-light, normal;
+    box-shadow:inset 0 0 0 1px rgba(90,58,28,.5), inset 0 3px 9px rgba(60,35,12,.55),
+      inset 0 -22px 46px rgba(70,42,16,.4), inset 0 0 90px rgba(80,48,18,.32)}
+
+  .controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:26px}
+  .tabs{display:flex;gap:3px;padding:3px;border-radius:4px;background:rgba(58,34,14,.32);
+    box-shadow:inset 0 1px 3px rgba(50,28,8,.5)}
+  .tab{border:0;background:transparent;color:#5C4227;padding:7px 13px;font-size:12px;font-weight:600;border-radius:3px}
+  .tab:hover{color:#3C2A15}
+  .tab[aria-selected="true"]{background:linear-gradient(180deg,#FBF6EA,#E9DEC7);color:#3C2A15;
+    box-shadow:0 1px 2px rgba(60,35,12,.4), inset 0 1px 0 #fff}
+  .tab span{font-family:'Roboto Mono',monospace;font-size:10px;margin-left:6px;opacity:.65}
+  .search{width:200px;padding:8px 12px;font-size:12.5px;font-family:inherit;color:#3C2A15;border-radius:3px;
+    background:linear-gradient(180deg,#FBF7ED,#F1E9D8);border:1px solid rgba(80,52,22,.35);
+    box-shadow:inset 0 2px 4px rgba(80,52,22,.2)}
+  .search::placeholder{color:#9C8869}
+
+  .board{display:grid;grid-template-columns:repeat(auto-fill,minmax(252px,1fr));gap:44px 26px;align-items:start}
+  .note{position:relative;padding:34px 19px 15px;min-height:246px;display:flex;flex-direction:column;color:var(--ink);
+    box-shadow:0 1px 1px rgba(60,35,12,.30), 0 4px 6px -2px rgba(60,35,12,.35), 0 16px 26px -12px rgba(40,22,6,.55);
+    transition:transform .2s cubic-bezier(.2,.7,.3,1), box-shadow .2s}
+  .note .sheet{position:absolute;inset:0;pointer-events:none;opacity:.5;mix-blend-mode:multiply;
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' seed='9'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23p)' opacity='0.55'/%3E%3C/svg%3E"),
+      repeating-linear-gradient(180deg, transparent 0 25px, var(--paper-line) 25px 26px);
+    background-blend-mode:multiply,normal}
+  .note .sheet::after{content:"";position:absolute;left:0;right:0;top:0;height:30px;
+    background:linear-gradient(180deg, rgba(0,0,0,.09), rgba(255,255,255,.05) 70%, transparent)}
+  .note .curl{position:absolute;right:0;bottom:0;width:26px;height:26px;pointer-events:none;
+    background:linear-gradient(135deg, transparent 48%, rgba(0,0,0,.16) 50%, rgba(255,255,255,.42) 54%, transparent 62%)}
+  .note:hover{transform:translateY(-6px) rotate(0deg) scale(1.015) !important;z-index:5;
+    box-shadow:0 2px 2px rgba(60,35,12,.28), 0 10px 14px -4px rgba(60,35,12,.4), 0 34px 48px -18px rgba(30,16,4,.65)}
+  .note:focus-within{transform:rotate(0deg) !important;z-index:6}
+  .pin{position:absolute;top:-11px;left:50%;transform:translateX(-50%);width:24px;height:24px;pointer-events:none;z-index:3}
+  .pin .head{position:absolute;inset:0;border-radius:50%;
+    background:radial-gradient(circle at 34% 26%, rgba(255,255,255,.95) 0 9%, rgba(255,255,255,.35) 16%, transparent 42%),
+      radial-gradient(circle at 62% 74%, rgba(0,0,0,.42), transparent 58%),
+      radial-gradient(circle at 50% 45%, var(--pinA), var(--pinB) 72%);
+    box-shadow:0 2px 3px rgba(40,20,4,.55), inset 0 -2px 3px rgba(0,0,0,.35)}
+  .pin .collar{position:absolute;left:50%;bottom:-3px;transform:translateX(-50%);width:9px;height:6px;
+    border-radius:0 0 3px 3px;background:linear-gradient(180deg,var(--steel-1),var(--steel-2) 55%,var(--steel-3));
+    box-shadow:0 1px 2px rgba(0,0,0,.5)}
+  .note .pinshade{position:absolute;top:6px;left:50%;transform:translateX(-50%);width:26px;height:9px;
+    border-radius:50%;background:rgba(60,34,10,.28);filter:blur(3px);pointer-events:none}
+  .note.done{filter:saturate(.62)}
+  .stamp{position:absolute;top:52px;right:6px;transform:rotate(-14deg);z-index:2;font-size:9.5px;font-weight:700;
+    letter-spacing:.28em;color:rgba(168,52,38,.62);border:2.5px solid rgba(168,52,38,.5);border-radius:3px;padding:3px 6px;pointer-events:none}
+  .n-title{position:relative;z-index:1;font-family:'Caveat',cursive;font-weight:700;font-size:25px;line-height:1.08;
+    background:transparent;border:0;width:100%;color:#26221B;padding:0 0 5px;resize:none;overflow:hidden}
+  .note.done .n-title{text-decoration:line-through;text-decoration-thickness:2px;opacity:.65}
+  .n-title::placeholder{color:rgba(46,42,36,.35)}
+  .rule{position:relative;z-index:1;height:1px;background:rgba(46,42,36,.22);margin:2px 0 9px}
+  .n-notes{position:relative;z-index:1;background:transparent;border:0;width:100%;flex:1;min-height:66px;resize:none;
+    padding:0;font-family:'Caveat',cursive;font-size:17px;line-height:26px;color:#3E382E}
+  .n-notes::placeholder{color:rgba(46,42,36,.32);font-size:15px}
+  .prog{position:relative;z-index:1;margin-top:10px}
+  .prog-head{display:flex;justify-content:space-between;font-family:'Roboto Mono',monospace;font-size:9px;
+    letter-spacing:.16em;text-transform:uppercase;color:rgba(46,42,36,.55);margin-bottom:5px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:15px;background:transparent}
+  input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:rgba(46,42,36,.16);
+    box-shadow:inset 0 1px 2px rgba(0,0,0,.22)}
+  input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:rgba(46,42,36,.16)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    margin-top:-4.5px;background:radial-gradient(circle at 34% 30%, #fff 0 14%, #C9C2B4 46%, #6E675A);
+    box-shadow:0 1px 3px rgba(0,0,0,.45)}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border:0;border-radius:50%;
+    background:radial-gradient(circle at 34% 30%, #fff 0 14%, #C9C2B4 46%, #6E675A);box-shadow:0 1px 3px rgba(0,0,0,.45)}
+  .n-foot{position:relative;z-index:1;display:flex;align-items:center;gap:6px;margin-top:11px;padding-top:9px;
+    border-top:1px dashed rgba(46,42,36,.26)}
+  .n-foot select,.n-foot input[type=date]{background:rgba(255,255,255,.42);border:1px solid rgba(46,42,36,.2);
+    color:#332F27;font-family:'Roboto Mono',monospace;font-size:9.5px;padding:4px 5px;border-radius:2px}
+  .icon{background:transparent;border:0;padding:4px;line-height:0;opacity:.42;border-radius:3px}
+  .icon:hover{opacity:1;background:rgba(0,0,0,.07)}
+  .icon svg{width:14px;height:14px;stroke:#2E2A24;fill:none;stroke-width:1.7}
+  .swatch{width:15px;height:15px;border-radius:50%;padding:0;opacity:1;border:1.5px solid rgba(46,42,36,.35);
+    box-shadow:inset 0 -2px 3px rgba(0,0,0,.18), 0 1px 1px rgba(0,0,0,.25)}
+  .overdue{color:#9A2E1F;font-weight:700;background:rgba(255,214,208,.7)!important}
+  .add{min-height:246px;background:rgba(255,250,240,.10);border:2px dashed rgba(88,56,24,.42);border-radius:2px;
+    color:#6B4B27;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+    font-family:'Caveat',cursive;font-size:21px;font-weight:600;box-shadow:none}
+  .add:hover{background:rgba(255,250,240,.2);border-color:#6B4B27;color:#4A3218;transform:none!important;box-shadow:none}
+  .add .plus{font-family:'Inter';font-size:26px;font-weight:300;line-height:1}
+
+  .setup{max-width:640px;margin:34px auto;padding:32px;position:relative;
+    background:linear-gradient(178deg,#FDFBF4,#F2ECDD);color:#332F27;border-radius:2px;
+    box-shadow:0 2px 3px rgba(60,35,12,.3), 0 20px 34px -14px rgba(30,16,4,.6)}
+  .setup h2{font-family:'Caveat',cursive;font-size:33px;font-weight:700;margin:0 0 8px;color:#26221B;text-align:center}
+  .setup > p{color:#5F594C;font-size:13.5px;line-height:1.72;margin:0 auto 24px;max-width:480px;text-align:center}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:600px){.grid2{grid-template-columns:1fr}}
+  .src{text-align:left;padding:16px;border:1px solid rgba(60,45,20,.28);border-radius:3px;
+    background:linear-gradient(180deg,#FFFDF7,#F5EFE0);color:#332F27;display:block;width:100%}
+  .src:hover{border-color:#B08A1E;background:linear-gradient(180deg,#fff,#FAF4E5)}
+  .src b{display:block;font-size:13.5px;font-weight:600;margin-bottom:4px}
+  .src span{display:block;font-size:11.5px;line-height:1.55;color:#6E6858}
+  .src .badge{display:inline-block;margin-bottom:8px;font-family:'Roboto Mono',monospace;font-size:8.5px;
+    letter-spacing:.14em;text-transform:uppercase;padding:2px 6px;border-radius:2px;background:#E3D9BF;color:#6B5A2E}
+  .panel{margin-top:20px;padding-top:20px;border-top:1px solid rgba(60,45,20,.18)}
+  .panel label{display:block;font-family:'Roboto Mono',monospace;font-size:9.5px;letter-spacing:.12em;
+    text-transform:uppercase;color:#7C7463;margin:0 0 6px}
+  .panel input{width:100%;padding:9px 11px;font-size:12.5px;font-family:'Roboto Mono',monospace;color:#332F27;
+    border:1px solid rgba(60,45,20,.3);border-radius:3px;background:#FFFDF7;margin-bottom:14px;
+    box-shadow:inset 0 1px 3px rgba(80,52,22,.12)}
+  .panel .note-line{font-size:11.5px;line-height:1.65;color:#6E6858;margin:0 0 16px}
+  .panel .note-line b{color:#4A4437}
+  .steps{margin:0 0 18px;padding-left:18px;font-size:11.5px;line-height:1.75;color:#6E6858}
+  .steps code{font-family:'Roboto Mono',monospace;font-size:10.5px;background:#EDE5D2;padding:1px 4px;border-radius:2px}
+  .hint{font-family:'Roboto Mono',monospace;font-size:9.5px;letter-spacing:.09em;color:#8A8272;margin:18px 0 0;text-align:center;line-height:1.7}
+  .row{display:flex;gap:9px;flex-wrap:wrap;justify-content:center}
+  .setup .btn{background:linear-gradient(180deg,#FFFDF7,#EAE2CF);color:#3A342A;border-color:rgba(60,45,20,.35);
+    box-shadow:inset 0 1px 0 #fff, 0 1px 2px rgba(60,35,12,.25)}
+  .setup .btn.primary{background:linear-gradient(180deg,#D9B23C,#B08A1E);color:#2A2008;border-color:#7A5F12}
+
+  /* remember-me row */
+  .remember{display:flex;align-items:flex-start;gap:9px;margin:-4px 0 16px;font-size:11.5px;
+    line-height:1.55;color:#5F594C}
+  .remember input{width:auto;margin:2px 0 0;flex:none}
+  .remember b{color:#4A4437;font-weight:600}
+
+  /* binned notes */
+  .note.binned{filter:grayscale(.7) brightness(.95)}
+  .note.binned .n-title{text-decoration:none;opacity:.75}
+  .binbar{position:relative;z-index:1;display:flex;gap:7px;margin-top:auto;padding-top:10px;
+    border-top:1px dashed rgba(46,42,36,.26)}
+  .binbtn{flex:1;border:1px solid rgba(46,42,36,.28);border-radius:2px;background:rgba(255,255,255,.45);
+    color:#332F27;font-size:11px;font-weight:600;padding:6px 4px;font-family:inherit}
+  .binbtn:hover{background:#fff}
+  .binbtn.danger{color:#8E2A1D;border-color:rgba(142,42,29,.38)}
+  .binbtn.danger:hover{background:#FBE7E3}
+  .binmeta{position:relative;z-index:1;font-family:'Roboto Mono',monospace;font-size:9px;letter-spacing:.1em;
+    text-transform:uppercase;color:rgba(46,42,36,.52);margin-top:9px}
+  .empty{grid-column:1/-1;text-align:center;padding:52px 20px;font-family:'Caveat',cursive;font-size:22px;
+    font-weight:600;color:#6B4B27}
+
+  /* detail sheet */
+  .scrim{position:fixed;inset:0;z-index:70;background:rgba(20,12,6,.6);backdrop-filter:blur(3px);
+    display:flex;align-items:flex-start;justify-content:center;padding:38px 18px;overflow:auto}
+  .doc{width:100%;max-width:620px;position:relative;color:#332F27;border-radius:2px;padding:30px 32px 28px;
+    background:linear-gradient(178deg,#FDFBF4,#F4EEE1);
+    box-shadow:0 3px 4px rgba(30,16,4,.42), 0 32px 62px -20px rgba(18,9,2,.8)}
+  .doc::before{content:"";position:absolute;left:0;right:0;top:0;height:5px;background:var(--tint,#C9A227)}
+  .doc .close{position:absolute;top:14px;right:14px;background:transparent;border:0;padding:6px;line-height:0;opacity:.45;border-radius:3px}
+  .doc .close:hover{opacity:1;background:rgba(0,0,0,.06)}
+  .doc .close svg{width:16px;height:16px;stroke:#332F27;fill:none;stroke-width:1.8}
+  .doc .eyebrow{font-family:'Roboto Mono',monospace;font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;
+    color:#8A8272;margin:0 0 6px}
+  .doc h3{font-family:'Caveat',cursive;font-weight:700;font-size:29px;line-height:1.15;margin:0 0 4px;
+    color:#26221B;padding-right:26px}
+  .chips{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0 22px}
+  .chip{font-family:'Roboto Mono',monospace;font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;
+    padding:4px 8px;border-radius:2px;background:#E9E1CD;color:#5B5442;border:1px solid rgba(60,45,20,.18)}
+  .chip.warn{background:#F8DED8;color:#8E2A1D;border-color:rgba(142,42,29,.28)}
+  .chip.ok{background:#DDEBD8;color:#3D6B3A;border-color:rgba(61,107,58,.24)}
+  .doc h4{font-family:'Roboto Mono',monospace;font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:#8A8272;margin:22px 0 9px;padding-bottom:6px;border-bottom:1px solid rgba(60,45,20,.16)}
+  .doc .body{font-family:'Caveat',cursive;font-size:18px;line-height:27px;color:#3E382E;white-space:pre-wrap;
+    background:repeating-linear-gradient(180deg,transparent 0 26px,rgba(70,90,120,.14) 26px 27px);
+    padding:2px 0;margin:0}
+  .doc .body.none{font-family:'Inter';font-size:12.5px;color:#9A9384;background:none;font-style:italic}
+  .meter{height:8px;border-radius:4px;background:rgba(46,42,36,.14);overflow:hidden;
+    box-shadow:inset 0 1px 2px rgba(0,0,0,.18);margin:4px 0 3px}
+  .meter i{display:block;height:100%;background:linear-gradient(90deg,#C9A227,#9C7A12)}
+  dl{display:grid;grid-template-columns:auto 1fr;gap:7px 18px;margin:0;font-size:12.5px}
+  dt{font-family:'Roboto Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:#8A8272;padding-top:2px}
+  dd{margin:0;color:#3E382E}
+  .tl{margin:0;padding:0;list-style:none;max-height:230px;overflow:auto}
+  .tl li{display:grid;grid-template-columns:112px 1fr;gap:12px;padding:7px 0;
+    border-bottom:1px dotted rgba(60,45,20,.18);font-size:12px}
+  .tl li:last-child{border-bottom:0}
+  .tl time{font-family:'Roboto Mono',monospace;font-size:9.5px;color:#8A8272;padding-top:2px}
+  .tl b{font-weight:600;color:#3E382E}
+  .tl span{color:#7C7463}
+
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(80px);
+    background:linear-gradient(180deg,#2B2118,#1C150F);border:1px solid rgba(201,162,39,.4);color:#F0EAdd;
+    padding:11px 18px;border-radius:3px;font-size:12.5px;z-index:60;opacity:0;transition:.25s;
+    box-shadow:0 14px 34px rgba(0,0,0,.6);max-width:min(540px,90vw)}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  @media (max-width:600px){
+    .cork{padding:30px 16px 34px}.stage{padding:16px 12px 60px}.frame{padding:9px}
+    .board{grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:38px 16px}.search{width:100%}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.note:hover{transform:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <div class="mark">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="3" y="5" width="26" height="22" rx="2" fill="#C39A6B" stroke="#4E3826" stroke-width="2"/>
+        <rect x="8" y="10" width="9" height="9" fill="#FCEB7E" stroke="#4E3826" stroke-width="1.2"/>
+        <rect x="18" y="14" width="7" height="7" fill="#AFE2BE" stroke="#4E3826" stroke-width="1.2"/>
+        <circle cx="12.5" cy="10" r="1.6" fill="#C9302C"/>
+      </svg>
+      <div><h1>Pinboard</h1><p id="srcLabel">no source</p></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="plate"><span class="led" id="led"></span>
+      <span class="txt">Store<b id="fileName">not connected</b></span></div>
+    <button class="btn" id="btnPull" hidden>
+      <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 10-2.3 5.7M20 5v6h-6"/></svg> Reload</button>
+    <button class="btn" id="btnHistory" hidden>
+      <svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></svg> History</button>
+    <button class="btn" id="btnDownload">
+      <svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 19h14"/></svg> Download .xlsx</button>
+    <button class="btn" id="btnSwitch">Change store</button>
+  </div>
+</header>
+
+<div class="stage">
+  <div class="frame">
+    <div class="cork">
+
+      <div class="controls" id="controls" hidden>
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab" data-filter="all" aria-selected="true">All <span id="c-all">0</span></button>
+          <button class="tab" role="tab" data-filter="To do" aria-selected="false">To do <span id="c-todo">0</span></button>
+          <button class="tab" role="tab" data-filter="In progress" aria-selected="false">In progress <span id="c-prog">0</span></button>
+          <button class="tab" role="tab" data-filter="Done" aria-selected="false">Done <span id="c-done">0</span></button>
+          <button class="tab" role="tab" data-filter="Bin" aria-selected="false">Bin <span id="c-bin">0</span></button>
+        </div>
+        <input class="search" id="search" type="search" placeholder="Search notes…" aria-label="Search notes">
+        <div class="spacer"></div>
+        <button class="btn" id="btnEmptyBin" hidden>
+          <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13"/></svg> Empty bin</button>
+        <button class="btn primary" id="btnAdd">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Add note</button>
+      </div>
+
+      <div id="setup" class="setup">
+        <h2>Where should the Excel file live?</h2>
+        <p>The board keeps three sheets in sync — your tasks, a summary, and a dated log of every change.</p>
+
+        <div id="chooser">
+          <div class="grid2">
+            <button class="src" id="pickRepo">
+              <span class="badge">Recommended</span>
+              <b>In your GitHub repo</b>
+              <span>The .xlsx sits beside your page. Reachable from any device, and every save is a commit you can roll back.</span>
+            </button>
+            <button class="src" id="pickLocal">
+              <span class="badge">No setup</span>
+              <b>On this computer</b>
+              <span>A file on your own disk. Nothing to configure, but it stays on this machine. Chrome and Edge only.</span>
+            </button>
+          </div>
+          <p class="hint">No server and no database. Nothing is stored by this page.</p>
+        </div>
+
+        <!-- github panel -->
+        <div id="gPanel" class="panel" hidden>
+          <ol class="steps">
+            <li>GitHub → <b>Settings → Developer settings → Personal access tokens → Fine-grained tokens</b></li>
+            <li><b>Generate new token</b> → under <em>Repository access</em> pick <b>Only select repositories</b> and choose the one repo</li>
+            <li>Under <em>Permissions → Repository permissions</em>, set <b>Contents</b> to <code>Read and write</code></li>
+            <li>Generate, copy the token, and paste it below</li>
+          </ol>
+          <label for="gRepo">Repository</label>
+          <input id="gRepo" type="text" placeholder="your-username/your-repo" autocomplete="off" spellcheck="false">
+          <label for="gPath">File path in the repo</label>
+          <input id="gPath" type="text" value="data/todo-board.xlsx" autocomplete="off" spellcheck="false">
+          <label for="gBranch">Branch</label>
+          <input id="gBranch" type="text" value="main" autocomplete="off" spellcheck="false">
+          <label for="gToken">Access token</label>
+          <input id="gToken" type="password" placeholder="github_pat_…" autocomplete="off" spellcheck="false">
+          <label class="remember" for="gRemember">
+            <input type="checkbox" id="gRemember" checked>
+            <span><b>Remember on this device</b> — the board reconnects by itself every visit, so you enter this once.
+              Stored in this browser only. Use a private browser or untick this on a shared computer.</span>
+          </label>
+          <div class="row">
+            <button class="btn primary" id="gConnect">Connect</button>
+            <button class="btn" id="gForget" hidden>Forget saved details</button>
+            <button class="btn" id="gBack">Back</button>
+          </div>
+          <p class="hint">Never paste the token into index.html — GitHub revokes tokens it finds in a repo,<br>
+            and a hosted page shows it to everyone. If the repo is public, so is the .xlsx.</p>
+        </div>
+
+        <!-- local panel -->
+        <div id="lPanel" class="panel" hidden>
+          <p class="note-line" id="lSetupNote"></p>
+          <div class="row">
+            <button class="btn primary" id="lNew">Create new workbook</button>
+            <button class="btn" id="lOpen">Open existing .xlsx</button>
+            <button class="btn" id="lSkip">Work unlinked</button>
+            <button class="btn" id="lBack">Back</button>
+          </div>
+          <input type="file" id="filePicker" accept=".xlsx,.xls" hidden>
+        </div>
+      </div>
+
+      <div class="board" id="board" hidden></div>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim" hidden role="dialog" aria-modal="true" aria-label="Note details"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ==========================================================================
+   Pinboard — static task board that keeps an .xlsx as its only store.
+     1. GitHub repo   — read + write through the Contents API (any device)
+     2. Local file    — read + write through the File System Access API
+   No server, no database, no token ever written to disk or to the repo.
+   ========================================================================== */
+
+/* Optional: pre-fill the repo so nobody has to type it. Never put a token here. */
+const REPO_DEFAULTS = { repo:'', path:'data/todo-board.xlsx', branch:'main' };
+
+const SHEETS  = { tasks:'Tasks', summary:'Summary', activity:'Activity log', bin:'Bin' };
+const TASK_COLS = ['ID','Title','Notes','Status','Progress %','Due date','Created','Completed','Last updated','Colour'];
+const HEADERS = {
+  tasks:TASK_COLS,
+  summary:['Metric','Value'],
+  activity:['Timestamp','Task ID','Task','Event','Detail'],
+  bin:[...TASK_COLS,'Deleted at']
+};
+const COLORS = ['--p1','--p2','--p3','--p4','--p5','--p6'];
+const PINS   = [['#E85A4F','#9E241C'],['#4E8FD1','#22507E'],['#E8B23A','#9C6D10'],
+                ['#5FB07A','#27663F'],['#B06FC4','#6A2E7C'],['#D96A9B','#8E2A57']];
+const STATUSES = ['To do','In progress','Done'];
+const HAS_FSA  = 'showSaveFilePicker' in window;
+
+const state = { mode:null, tasks:[], bin:[], activity:[], handle:null, fileName:null,
+                filter:'all', query:'', started:false };
+const gh    = { owner:'', repo:'', branch:'main', path:'', token:'', sha:null };
+
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2,'0');
+const today = () => { const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+const stamp = () => { const d=new Date(); return `${today()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const uid = () => 'T-'+Date.now().toString(36).slice(-5).toUpperCase()+Math.floor(Math.random()*90+10);
+const esc = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function hash(id){ let h=0; for(const ch of id) h=(h*31+ch.charCodeAt(0))%9973; return h; }
+const tilt  = id => (((hash(id)%440)/100)-2.2).toFixed(2);
+const pinOf = id => PINS[hash(id)%PINS.length];
+
+let toastTimer;
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),4400); }
+function setLed(mode,text){
+  $('led').className='led'+(mode==='live'?' live':mode==='busy'?' busy':mode==='err'?' err':'');
+  $('fileName').textContent = state.fileName ? `${state.fileName} · ${text}` : text;
+}
+function log(task,event,detail=''){
+  state.activity.push({when:stamp(),id:task.id,title:task.title||'(untitled)',event,detail});
+  if(state.activity.length>4000) state.activity.splice(0,800);
+}
+
+/* ---------- rows ---------- */
+const rowOf = t => [t.id,t.title,t.notes,t.status,t.progress,t.due,t.created,t.completed,t.updated,t.color];
+function taskRows(){ return state.tasks.map(rowOf); }
+function binRows(){ return state.bin.map(t=>[...rowOf(t), t.deletedAt||'']); }
+function summaryRows(){
+  const avg = state.tasks.length
+    ? Math.round(state.tasks.reduce((s,t)=>s+Number(t.progress||0),0)/state.tasks.length) : 0;
+  return [
+    ['Total notes', state.tasks.length],
+    ['To do',       state.tasks.filter(t=>t.status==='To do').length],
+    ['In progress', state.tasks.filter(t=>t.status==='In progress').length],
+    ['Done',        state.tasks.filter(t=>t.status==='Done').length],
+    ['Overall progress %', avg],
+    ['Overdue',     state.tasks.filter(t=>t.due && t.due<today() && t.status!=='Done').length],
+    ['In bin',      state.bin.length],
+    ['Last saved',  stamp()]
+  ];
+}
+function activityRows(){ return state.activity.map(a=>[a.when,a.id,a.title,a.event,a.detail]); }
+function rowToTask(r,byName){
+  const g = n => byName[n]>=0 ? String(r[byName[n]] ?? '') : '';
+  return {
+    id:g('ID')||uid(), title:g('Title'), notes:g('Notes'),
+    status:STATUSES.includes(g('Status'))?g('Status'):'To do',
+    progress:Math.min(100,Math.max(0,Number(g('Progress %'))||0)),
+    due:g('Due date'), created:g('Created')||today(), completed:g('Completed'),
+    updated:g('Last updated')||stamp(),
+    color:COLORS.includes(g('Colour'))?g('Colour'):COLORS[0]
+  };
+}
+
+/* ---------- workbook build / parse (shared by both stores) ---------- */
+function buildWorkbook(){
+  const wb = XLSX.utils.book_new();
+  const mk = (head,rows,cols,name)=>{
+    const ws = XLSX.utils.aoa_to_sheet([head, ...(rows.length?rows:[head.map(()=>'')])]);
+    ws['!cols']=cols; ws['!freeze']={xSplit:0,ySplit:1};
+    XLSX.utils.book_append_sheet(wb,ws,name);
+  };
+  mk(HEADERS.tasks, taskRows(),
+     [{wch:11},{wch:34},{wch:52},{wch:13},{wch:11},{wch:12},{wch:12},{wch:12},{wch:17},{wch:8}], SHEETS.tasks);
+  mk(HEADERS.summary, summaryRows(), [{wch:22},{wch:22}], SHEETS.summary);
+  mk(HEADERS.bin, binRows(),
+     [{wch:11},{wch:34},{wch:52},{wch:13},{wch:11},{wch:12},{wch:12},{wch:12},{wch:17},{wch:8},{wch:17}], SHEETS.bin);
+  mk(HEADERS.activity, activityRows(),
+     [{wch:17},{wch:11},{wch:32},{wch:20},{wch:46}], SHEETS.activity);
+  return wb;
+}
+const workbookBytes = () => new Uint8Array(XLSX.write(buildWorkbook(),{bookType:'xlsx',type:'array'}));
+const workbookBlob  = () => new Blob([workbookBytes()],
+  {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+
+function loadWorkbook(buffer){
+  const wb = XLSX.read(buffer,{type:'array'});
+  const ts = wb.Sheets[SHEETS.tasks] || wb.Sheets[wb.SheetNames[0]];
+  const rows = ts ? XLSX.utils.sheet_to_json(ts,{header:1,defval:''}) : [];
+  if(rows.length>1){
+    const head = rows[0].map(h=>String(h).trim());
+    const byName={}; HEADERS.tasks.forEach(h=>byName[h]=head.indexOf(h));
+    state.tasks = rows.slice(1).filter(r=>r.some(c=>String(c).trim())).map(r=>rowToTask(r,byName));
+  } else state.tasks=[];
+
+  const bs = wb.Sheets[SHEETS.bin];
+  const br = bs ? XLSX.utils.sheet_to_json(bs,{header:1,defval:''}) : [];
+  if(br.length>1){
+    const head = br[0].map(h=>String(h).trim());
+    const byName={}; HEADERS.bin.forEach(h=>byName[h]=head.indexOf(h));
+    state.bin = br.slice(1).filter(r=>r.some(c=>String(c).trim())).map(r=>{
+      const t = rowToTask(r,byName);
+      t.deletedAt = byName['Deleted at']>=0 ? String(r[byName['Deleted at']]||'') : '';
+      return t;
+    });
+  } else state.bin=[];
+
+  const as = wb.Sheets[SHEETS.activity];
+  const ar = as ? XLSX.utils.sheet_to_json(as,{header:1,defval:''}) : [];
+  state.activity = ar.slice(1).filter(r=>String(r[0]||'').trim())
+    .map(r=>({when:String(r[0]),id:String(r[1]),title:String(r[2]),event:String(r[3]),detail:String(r[4])}));
+}
+
+/* ==========================================================================
+   Store 1 — the .xlsx inside your GitHub repo
+   ========================================================================== */
+function bytesToB64(bytes){
+  let s=''; const chunk=0x8000;
+  for(let i=0;i<bytes.length;i+=chunk) s += String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
+  return btoa(s);
+}
+function b64ToBytes(b64){
+  const bin = atob(String(b64).replace(/\s/g,''));
+  const out = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i);
+  return out;
+}
+const contentsUrl = () =>
+  `https://api.github.com/repos/${gh.owner}/${gh.repo}/contents/${gh.path.split('/').map(encodeURIComponent).join('/')}`;
+
+async function ghFetch(url, method='GET', body){
+  const res = await fetch(url, {
+    method,
+    headers:{
+      'Accept':'application/vnd.github+json',
+      'X-GitHub-Api-Version':'2022-11-28',
+      ...(gh.token ? {Authorization:'Bearer '+gh.token} : {}),
+      ...(body ? {'Content-Type':'application/json'} : {})
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if(!res.ok){
+    let msg = res.statusText;
+    try{ msg = (await res.json()).message || msg; }catch{}
+    const err = new Error(msg); err.status = res.status; throw err;
+  }
+  return res.status===204 ? null : res.json();
+}
+
+function parseRepo(input){
+  const s = String(input||'').trim().replace(/^https?:\/\/github\.com\//,'').replace(/\.git$/,'').replace(/\/$/,'');
+  const m = s.match(/^([\w.-]+)\/([\w.-]+)$/);
+  return m ? {owner:m[1], repo:m[2]} : null;
+}
+
+async function repoPull(){
+  const data = await ghFetch(contentsUrl()+`?ref=${encodeURIComponent(gh.branch)}`);
+  gh.sha = data.sha;
+  let bytes;
+  if(data.content) bytes = b64ToBytes(data.content);
+  else {                                    // files over 1 MB come back without inline content
+    const raw = await fetch(data.download_url);
+    bytes = new Uint8Array(await raw.arrayBuffer());
+  }
+  loadWorkbook(bytes.buffer);
+}
+
+async function repoPush(retried){
+  const done = state.tasks.filter(t=>t.status==='Done').length;
+  const body = {
+    message: `Update board — ${state.tasks.length} notes, ${done} done (${stamp()})`,
+    content: bytesToB64(workbookBytes()),
+    branch:  gh.branch,
+    ...(gh.sha ? {sha:gh.sha} : {})
+  };
+  try{
+    const res = await ghFetch(contentsUrl(),'PUT',body);
+    gh.sha = res.content.sha;
+  }catch(err){
+    // 409/422 means the file moved on under us — refresh the sha and try once more
+    if(!retried && (err.status===409 || err.status===422)){
+      const cur = await ghFetch(contentsUrl()+`?ref=${encodeURIComponent(gh.branch)}`);
+      gh.sha = cur.sha;
+      toast('The file changed in the repo. Your version has been committed on top — check History if that was unexpected.');
+      return repoPush(true);
+    }
+    throw err;
+  }
+}
+
+/* Saved connection. Lives in this browser on this device — never in the repo.
+   Wrapped in try/catch so the board still works where storage is unavailable. */
+const CFG_KEY = 'pinboard.connection.v1';
+function saveCfg(){
+  try{ localStorage.setItem(CFG_KEY, JSON.stringify(
+    {repo:`${gh.owner}/${gh.repo}`, path:gh.path, branch:gh.branch, token:gh.token})); }catch{}
+}
+function readCfg(){ try{ return JSON.parse(localStorage.getItem(CFG_KEY)||'null'); }catch{ return null; } }
+function forgetCfg(){ try{ localStorage.removeItem(CFG_KEY); }catch{} }
+
+async function connectRepo(){
+  const parsed = parseRepo($('gRepo').value);
+  const path   = $('gPath').value.trim().replace(/^\/+/,'');
+  const branch = $('gBranch').value.trim() || 'main';
+  const token  = $('gToken').value.trim();
+  if(!parsed) return toast('Repository should look like username/repo.');
+  if(!/\.xlsx?$/i.test(path)) return toast('The file path should end in .xlsx');
+  if(!token) return toast('Paste a fine-grained token with Contents: Read and write.');
+
+  Object.assign(gh,{owner:parsed.owner, repo:parsed.repo, branch, path, token, sha:null});
+  state.mode='repo'; state.fileName=`${parsed.repo}/${path}`;
+  $('gConnect').disabled = true;
+  setLed('busy','connecting…');
+  try{
+    try{
+      await repoPull();
+      begin(); setLed('live','loaded '+stamp().slice(11));
+      toast(`Loaded ${state.tasks.length} note${state.tasks.length===1?'':'s'} from ${gh.path}.`);
+    }catch(err){
+      if(err.status!==404) throw err;
+      seed();                       // nothing there yet — create it
+      await repoPush();
+      begin(); setLed('live','created '+stamp().slice(11));
+      toast(`Created ${gh.path} in ${gh.repo}.`);
+    }
+    if($('gRemember').checked) saveCfg(); else forgetCfg();
+    $('gForget').hidden = !$('gRemember').checked;
+  }catch(err){
+    console.error(err);
+    state.mode=null; state.fileName=null;
+    setLed('err','not connected');
+    if(err.status===401 || err.status===403) forgetCfg();   // don't keep retrying a dead token
+    toast(err.status===401 ? 'Token rejected — it may have expired. Generate a new one and reconnect.'
+        : err.status===403 ? 'Access denied. The token needs Contents: Read and write on this repo.'
+        : 'Could not connect: '+err.message);
+  }finally{ $('gConnect').disabled=false; }
+}
+
+/* ==========================================================================
+   Store 2 — a local .xlsx
+   ========================================================================== */
+async function createLocal(){
+  try{
+    state.handle = await window.showSaveFilePicker({
+      suggestedName:'todo-board.xlsx',
+      types:[{description:'Excel workbook',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}]
+    });
+    state.mode='local'; state.fileName=state.handle.name;
+    if(!state.tasks.length) seed();
+    begin(); await saveNow();
+    toast('Linked. Every change now writes to '+state.fileName+'.');
+  }catch(e){ if(e.name!=='AbortError') toast('Could not create the file.'); }
+}
+async function openLocal(){
+  if(!HAS_FSA) return $('filePicker').click();
+  try{
+    const [h] = await window.showOpenFilePicker({
+      types:[{description:'Excel workbook',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx','.xls']}}]
+    });
+    if(await h.requestPermission({mode:'readwrite'})!=='granted') return toast('Write access is needed to keep the file up to date.');
+    state.handle=h; state.mode='local'; state.fileName=h.name;
+    loadWorkbook(await (await h.getFile()).arrayBuffer());
+    begin(); setLed('live','loaded');
+    toast(`Loaded ${state.tasks.length} note${state.tasks.length===1?'':'s'} from ${state.fileName}.`);
+  }catch(e){ if(e.name!=='AbortError'){ console.error(e); toast('That file could not be read.'); } }
+}
+function downloadCopy(){
+  const url=URL.createObjectURL(workbookBlob());
+  const a=document.createElement('a');
+  const base = (state.fileName||'todo-board').split('/').pop();
+  a.href=url; a.download = /\.xlsx?$/i.test(base) ? base : base+'.xlsx';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+/* ==========================================================================
+   Saving
+   ========================================================================== */
+let saveTimer=null, saving=false, queued=false, dirty=false;
+function scheduleSave(){
+  dirty=true; setLed('busy','saving…');
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(saveNow, state.mode==='repo' ? 4000 : 700);  // one commit per burst of edits
+}
+async function saveNow(){
+  if(!state.mode) { dirty=false; return; }
+  if(state.mode==='local' && !state.handle){ dirty=false; setLed('idle','unlinked'); return; }
+  if(saving){ queued=true; return; }
+  saving=true;
+  try{
+    if(state.mode==='repo') await repoPush();
+    else { const w=await state.handle.createWritable(); await w.write(workbookBlob()); await w.close(); }
+    dirty=false; setLed('live','saved '+stamp().slice(11));
+  }catch(err){
+    console.error(err);
+    setLed('err','save failed');
+    toast(state.mode==='repo'
+      ? 'Could not commit: '+err.message
+      : 'Could not write to the workbook. Close it in Excel, then edit a note to retry.');
+  }finally{
+    saving=false;
+    if(queued){ queued=false; saveNow(); }
+  }
+}
+
+/* ==========================================================================
+   Tasks + rendering
+   ========================================================================== */
+function seed(){
+  add({title:'Welcome to your board',status:'Done',progress:100,
+       notes:'Write straight onto a note. Everything is stored in the Excel file — no database anywhere.'});
+  add({title:'Drag the progress slider',status:'In progress',progress:40,
+       notes:'Reaching 100% marks the note done and stamps the completion date.'});
+  add({title:'Open the Activity log sheet',status:'To do',progress:0,
+       notes:'A dated row for every edit, status change and deletion.'});
+}
+function add(s={}){
+  const t={ id:uid(), title:s.title||'', notes:s.notes||'', status:s.status||'To do', progress:s.progress??0,
+    due:s.due||'', created:today(), completed:s.status==='Done'?today():'', updated:stamp(),
+    color:COLORS[state.tasks.length%COLORS.length] };
+  state.tasks.unshift(t); log(t,'Created'); return t;
+}
+function touch(t,event,detail){ t.updated=stamp(); log(t,event,detail); scheduleSave(); }
+function setStatus(t,status){
+  if(t.status===status) return;
+  const from=t.status; t.status=status;
+  if(status==='Done'){ t.progress=100; t.completed=today(); }
+  else{ if(from==='Done') t.progress=Math.min(t.progress,90); t.completed=''; }
+  touch(t,'Status changed',`${from} → ${status}`); render();
+}
+function moveToBin(t){
+  const i=state.tasks.indexOf(t); if(i>-1) state.tasks.splice(i,1);
+  t.deletedAt = stamp();
+  state.bin.unshift(t);
+  log(t,'Moved to bin',`was ${t.status} at ${t.progress}%`);
+  scheduleSave(); render();
+  toast('Moved to the bin. Open the Bin tab to restore it.');
+}
+function restoreFromBin(t){
+  const i=state.bin.indexOf(t); if(i>-1) state.bin.splice(i,1);
+  delete t.deletedAt; t.updated=stamp();
+  state.tasks.unshift(t);
+  log(t,'Restored from bin');
+  scheduleSave(); render();
+  toast('Restored to the board.');
+}
+function purge(t){
+  const i=state.bin.indexOf(t); if(i>-1) state.bin.splice(i,1);
+  log(t,'Deleted permanently',`binned ${t.deletedAt||'—'}`);
+  scheduleSave(); render();
+}
+function emptyBin(){
+  if(!state.bin.length) return;
+  if(!confirm(`Permanently delete all ${state.bin.length} note${state.bin.length===1?'':'s'} in the bin? This cannot be undone from the board.`)) return;
+  const n=state.bin.length;
+  state.bin.forEach(t=>log(t,'Deleted permanently','emptied bin'));
+  state.bin=[];
+  scheduleSave(); render();
+  toast(`Bin emptied — ${n} note${n===1?'':'s'} gone.`);
+}
+
+function begin(){
+  state.started=true;
+  $('setup').hidden=true; $('board').hidden=false; $('controls').hidden=false;
+  $('btnPull').hidden    = state.mode!=='repo';
+  $('btnHistory').hidden = state.mode!=='repo';
+  $('srcLabel').textContent = state.mode==='repo' ? 'GitHub repo · Excel'
+                            : state.mode==='local' ? 'Local file · Excel' : 'unlinked';
+  render();
+}
+function visible(){
+  const q=state.query.trim().toLowerCase();
+  return state.tasks.filter(t=>(state.filter==='all'||t.status===state.filter) &&
+    (!q || (t.title+' '+t.notes).toLowerCase().includes(q)));
+}
+function visibleBin(){
+  const q=state.query.trim().toLowerCase();
+  return state.bin.filter(t=>!q || (t.title+' '+t.notes).toLowerCase().includes(q));
+}
+function render(){
+  $('c-all').textContent=state.tasks.length;
+  $('c-todo').textContent=state.tasks.filter(t=>t.status==='To do').length;
+  $('c-prog').textContent=state.tasks.filter(t=>t.status==='In progress').length;
+  $('c-done').textContent=state.tasks.filter(t=>t.status==='Done').length;
+  $('c-bin').textContent=state.bin.length;
+
+  const inBin = state.filter==='Bin';
+  $('btnEmptyBin').hidden = !inBin || !state.bin.length;
+
+  const board=$('board');
+  const fid=document.activeElement?.closest?.('.note')?.dataset.id;
+  const ffield=document.activeElement?.dataset?.field;
+  const caret=document.activeElement?.selectionStart;
+
+  board.innerHTML='';
+
+  if(inBin){
+    const items = visibleBin();
+    if(!items.length){
+      const e=document.createElement('p'); e.className='empty';
+      e.textContent = state.bin.length ? 'Nothing in the bin matches that search.' : 'The bin is empty.';
+      board.appendChild(e);
+    } else for(const t of items) board.appendChild(noteEl(t,true));
+    return;
+  }
+
+  for(const t of visible()) board.appendChild(noteEl(t));
+
+  const addBtn=document.createElement('button');
+  addBtn.className='note add';
+  addBtn.innerHTML='<span class="plus">+</span><span>New note</span>';
+  addBtn.addEventListener('click',()=>{ const t=add(); scheduleSave(); render();
+    board.querySelector(`[data-id="${t.id}"] [data-field="title"]`)?.focus(); });
+  board.appendChild(addBtn);
+
+  if(fid&&ffield){
+    const el=board.querySelector(`[data-id="${fid}"] [data-field="${ffield}"]`);
+    if(el){ el.focus(); if(caret!=null&&el.setSelectionRange){ try{ el.setSelectionRange(caret,caret); }catch{} } }
+  }
+}
+function autoGrow(el){ el.style.height='auto'; el.style.height=el.scrollHeight+'px'; }
+
+function noteEl(t,binned){
+  const n=document.createElement('article');
+  n.className='note'+(t.status==='Done'?' done':'')+(binned?' binned':''); n.dataset.id=t.id;
+  const [pa,pb]=pinOf(t.id);
+  n.style.setProperty('--pinA',pa); n.style.setProperty('--pinB',pb);
+  n.style.background=`linear-gradient(168deg, color-mix(in srgb, var(${t.color}) 92%, #fff) 0%, var(${t.color}) 45%, color-mix(in srgb, var(${t.color}) 86%, #6b5a2e) 100%)`;
+  n.style.transform=`rotate(${tilt(t.id)}deg)`;
+  const overdue = t.due && t.due<today() && t.status!=='Done';
+
+  if(binned){
+    n.innerHTML=`
+      <span class="sheet"></span><span class="curl"></span><span class="pinshade"></span>
+      <span class="pin"><span class="head"></span><span class="collar"></span></span>
+      <span class="stamp">IN BIN</span>
+      <div class="n-title" style="white-space:pre-wrap">${esc(t.title)||'<span style="opacity:.4">Untitled</span>'}</div>
+      <div class="rule"></div>
+      <div class="n-notes" style="white-space:pre-wrap;overflow:hidden">${esc(t.notes)}</div>
+      <p class="binmeta">Binned ${esc(t.deletedAt||'—')} · ${esc(t.status)} · ${t.progress}%</p>
+      <div class="binbar">
+        <button class="binbtn" data-act="view">Details</button>
+        <button class="binbtn" data-act="restore">Restore</button>
+        <button class="binbtn danger" data-act="purge">Delete</button>
+      </div>`;
+    n.querySelector('[data-act=view]').addEventListener('click',()=>openDetail(t,true));
+    n.querySelector('[data-act=restore]').addEventListener('click',()=>restoreFromBin(t));
+    n.querySelector('[data-act=purge]').addEventListener('click',()=>{
+      if(confirm(`Permanently delete "${t.title||'this note'}"? This cannot be undone from the board.`)) purge(t);
+    });
+    return n;
+  }
+
+  n.innerHTML=`
+    <span class="sheet"></span><span class="curl"></span><span class="pinshade"></span>
+    <span class="pin"><span class="head"></span><span class="collar"></span></span>
+    ${t.status==='Done'?'<span class="stamp">COMPLETED</span>':''}
+    <textarea class="n-title" data-field="title" rows="1" placeholder="What needs doing?">${esc(t.title)}</textarea>
+    <div class="rule"></div>
+    <textarea class="n-notes" data-field="notes" placeholder="Notes, links, next step…">${esc(t.notes)}</textarea>
+    <div class="prog">
+      <div class="prog-head"><span>Progress</span><span data-role="pct">${t.progress}%</span></div>
+      <input type="range" min="0" max="100" step="5" value="${t.progress}" data-field="progress" aria-label="Progress">
+    </div>
+    <div class="n-foot">
+      <select data-field="status" aria-label="Status">
+        ${STATUSES.map(s=>`<option ${s===t.status?'selected':''}>${s}</option>`).join('')}
+      </select>
+      <input type="date" data-field="due" value="${esc(t.due)}" class="${overdue?'overdue':''}" aria-label="Due date">
+      <span style="flex:1"></span>
+      <button class="icon swatch" data-field="color" title="Change paper colour" style="background:var(${t.color})"></button>
+      <button class="icon" data-field="view" title="View full details" aria-label="View full details">
+        <svg viewBox="0 0 24 24"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.8"/></svg>
+      </button>
+      <button class="icon" data-field="delete" title="Move to bin" aria-label="Move to bin">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13"/></svg>
+      </button>
+    </div>`;
+
+  const title=n.querySelector('[data-field=title]'), notes=n.querySelector('[data-field=notes]');
+  requestAnimationFrame(()=>autoGrow(title));
+  title.addEventListener('input',()=>{ autoGrow(title); t.title=title.value; touch(t,'Title edited',title.value.slice(0,60)); });
+  title.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); notes.focus(); }});
+  notes.addEventListener('input',()=>{ t.notes=notes.value; touch(t,'Notes updated',notes.value.slice(0,80).replace(/\n/g,' ')); });
+
+  const range=n.querySelector('[data-field=progress]');
+  range.addEventListener('input',()=>{ n.querySelector('[data-role=pct]').textContent=range.value+'%'; });
+  range.addEventListener('change',()=>{
+    const v=Number(range.value), before=t.progress; t.progress=v;
+    if(v===100&&t.status!=='Done') return setStatus(t,'Done');
+    if(v>0&&v<100&&t.status==='To do') return setStatus(t,'In progress');
+    touch(t,'Progress updated',`${before}% → ${v}%`);
+  });
+  n.querySelector('[data-field=status]').addEventListener('change',e=>setStatus(t,e.target.value));
+  n.querySelector('[data-field=due]').addEventListener('change',e=>{
+    t.due=e.target.value; touch(t,'Due date set',t.due||'cleared'); render(); });
+  n.querySelector('[data-field=color]').addEventListener('click',()=>{
+    t.color=COLORS[(COLORS.indexOf(t.color)+1)%COLORS.length]; touch(t,'Colour changed',t.color); render(); });
+  n.querySelector('[data-field=view]').addEventListener('click',()=>openDetail(t,false));
+  n.querySelector('[data-field=delete]').addEventListener('click',()=>moveToBin(t));
+  return n;
+}
+
+/* ---------- full-details sheet ---------- */
+const PAPER_HEX = {'--p1':'#FCEB7E','--p2':'#FBB6AE','--p3':'#AFE2BE','--p4':'#A9CDEF','--p5':'#D9BEEE','--p6':'#FBCB92'};
+function daysBetween(a,b){ return Math.round((new Date(b)-new Date(a))/86400000); }
+
+function openDetail(t,binned){
+  const overdue = t.due && t.due<today() && t.status!=='Done';
+  const history = state.activity.filter(a=>a.id===t.id).slice().reverse();
+  const chips = [
+    `<span class="chip ${t.status==='Done'?'ok':''}">${esc(t.status)}</span>`,
+    `<span class="chip">${t.progress}% done</span>`,
+    binned ? '<span class="chip warn">In bin</span>' : '',
+    overdue ? `<span class="chip warn">Overdue by ${daysBetween(t.due,today())}d</span>` : '',
+    (!overdue && t.due && t.status!=='Done') ? `<span class="chip">Due in ${daysBetween(today(),t.due)}d</span>` : ''
+  ].join('');
+
+  const scrim=$('scrim');
+  scrim.innerHTML = `
+    <div class="doc" style="--tint:${PAPER_HEX[t.color]||'#C9A227'}">
+      <button class="close" data-act="close" aria-label="Close">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <p class="eyebrow">${esc(t.id)}</p>
+      <h3>${esc(t.title)||'Untitled note'}</h3>
+      <div class="chips">${chips}</div>
+
+      <h4>Notes</h4>
+      <p class="body ${t.notes?'':'none'}">${t.notes?esc(t.notes):'No notes on this one yet.'}</p>
+
+      <h4>Progress</h4>
+      <div class="meter"><i style="width:${t.progress}%"></i></div>
+      <dl style="margin-top:14px">
+        <dt>Due</dt><dd>${esc(t.due)||'—'}</dd>
+        <dt>Created</dt><dd>${esc(t.created)||'—'}</dd>
+        <dt>Completed</dt><dd>${esc(t.completed)||'—'}</dd>
+        <dt>Last edit</dt><dd>${esc(t.updated)||'—'}</dd>
+        ${binned?`<dt>Binned</dt><dd>${esc(t.deletedAt)||'—'}</dd>`:''}
+        <dt>Colour</dt><dd>${esc((t.color||'').replace('--p','Paper '))}</dd>
+      </dl>
+
+      <h4>History — ${history.length} event${history.length===1?'':'s'}</h4>
+      ${history.length ? `<ul class="tl">${history.map(a=>`
+        <li><time>${esc(a.when)}</time><span><b>${esc(a.event)}</b>${a.detail?' — '+esc(a.detail):''}</span></li>`).join('')}</ul>`
+        : '<p class="body none">No history recorded for this note yet.</p>'}
+
+      <div class="row" style="justify-content:flex-start;margin-top:24px">
+        ${binned
+          ? `<button class="btn primary" data-act="restore">Restore to board</button>
+             <button class="btn" data-act="purge">Delete permanently</button>`
+          : `<button class="btn" data-act="bin">Move to bin</button>`}
+        <button class="btn" data-act="close">Close</button>
+      </div>
+    </div>`;
+  scrim.hidden=false;
+  document.body.style.overflow='hidden';
+
+  scrim.querySelectorAll('[data-act=close]').forEach(b=>b.addEventListener('click',closeDetail));
+  scrim.querySelector('[data-act=bin]')?.addEventListener('click',()=>{ closeDetail(); moveToBin(t); });
+  scrim.querySelector('[data-act=restore]')?.addEventListener('click',()=>{ closeDetail(); restoreFromBin(t); });
+  scrim.querySelector('[data-act=purge]')?.addEventListener('click',()=>{
+    if(confirm(`Permanently delete "${t.title||'this note'}"? This cannot be undone from the board.`)){ closeDetail(); purge(t); }
+  });
+  scrim.querySelector('.close').focus();
+}
+function closeDetail(){
+  const scrim=$('scrim');
+  scrim.hidden=true; scrim.innerHTML='';
+  document.body.style.overflow='';
+}
+$('scrim').addEventListener('click',e=>{ if(e.target===$('scrim')) closeDetail(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && !$('scrim').hidden) closeDetail(); });
+
+/* ==========================================================================
+   Wiring
+   ========================================================================== */
+function showPanel(which){
+  $('chooser').hidden = which!==null;
+  $('gPanel').hidden  = which!=='repo';
+  $('lPanel').hidden  = which!=='local';
+}
+$('pickRepo').addEventListener('click',()=>{ showPanel('repo'); $('gRepo').focus(); });
+$('pickLocal').addEventListener('click',()=>showPanel('local'));
+$('gBack').addEventListener('click',()=>showPanel(null));
+$('lBack').addEventListener('click',()=>showPanel(null));
+$('gConnect').addEventListener('click',connectRepo);
+$('gToken').addEventListener('keydown',e=>{ if(e.key==='Enter') connectRepo(); });
+
+$('lNew').addEventListener('click',()=> HAS_FSA ? createLocal()
+  : (state.mode='local', seed(), begin(), toast('Working unlinked — use Download .xlsx to save.')));
+$('lOpen').addEventListener('click',openLocal);
+$('lSkip').addEventListener('click',()=>{ state.mode='local'; if(!state.tasks.length) seed(); begin(); setLed('idle','unlinked'); });
+$('filePicker').addEventListener('change',async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  try{
+    loadWorkbook(await f.arrayBuffer());
+    state.mode='local'; state.fileName=f.name; state.handle=null;
+    begin(); setLed('idle','read-only copy');
+    toast('Loaded. This browser cannot write back — use Download .xlsx to save changes.');
+  }catch(err){ console.error(err); toast('That file could not be read.'); }
+  e.target.value='';
+});
+
+$('btnDownload').addEventListener('click',downloadCopy);
+$('btnHistory').addEventListener('click',()=>
+  window.open(`https://github.com/${gh.owner}/${gh.repo}/commits/${gh.branch}/${gh.path}`,'_blank','noopener'));
+$('btnPull').addEventListener('click',async()=>{
+  if(dirty && !confirm('You have unsaved edits. Reloading replaces them with what is in the repo. Continue?')) return;
+  setLed('busy','reloading…');
+  try{ await repoPull(); render(); setLed('live','reloaded '+stamp().slice(11)); toast('Reloaded from the repo.'); }
+  catch(e){ setLed('err','reload failed'); toast('Could not reload: '+e.message); }
+});
+$('btnSwitch').addEventListener('click',()=>{
+  if(dirty && !confirm('You have unsaved edits. Switch store anyway?')) return;
+  Object.assign(state,{mode:null,tasks:[],bin:[],activity:[],handle:null,fileName:null,started:false,filter:'all'});
+  Object.assign(gh,{owner:'',repo:'',path:'',token:'',sha:null});
+  $('gToken').value=''; dirty=false;
+  $('setup').hidden=false; $('board').hidden=true; $('controls').hidden=true;
+  $('btnPull').hidden=$('btnHistory').hidden=true;
+  $('srcLabel').textContent='no source';
+  showPanel(null); setLed('idle','not connected');
+});
+
+$('gForget').addEventListener('click',()=>{
+  forgetCfg(); $('gForget').hidden=true; $('gToken').value=''; $('gRemember').checked=false;
+  toast('Saved connection removed from this browser.');
+});
+$('btnEmptyBin').addEventListener('click',emptyBin);
+$('btnAdd').addEventListener('click',()=>{
+  if(state.filter==='Bin'){
+    state.filter='all';
+    document.querySelectorAll('.tab').forEach(x=>x.setAttribute('aria-selected', x.dataset.filter==='all'?'true':'false'));
+  }
+  const t=add(); scheduleSave(); render();
+  document.querySelector(`[data-id="${t.id}"] [data-field="title"]`)?.focus(); });
+$('search').addEventListener('input',e=>{ state.query=e.target.value; render(); });
+document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.setAttribute('aria-selected','false'));
+  tab.setAttribute('aria-selected','true'); state.filter=tab.dataset.filter; render();
+}));
+window.addEventListener('beforeunload',e=>{ if(dirty){ e.preventDefault(); e.returnValue=''; } });
+
+/* first paint */
+if(REPO_DEFAULTS.repo) $('gRepo').value = REPO_DEFAULTS.repo;
+if(REPO_DEFAULTS.path) $('gPath').value = REPO_DEFAULTS.path;
+if(REPO_DEFAULTS.branch) $('gBranch').value = REPO_DEFAULTS.branch;
+
+/* Reconnect automatically if this browser remembers the details. */
+(function autoConnect(){
+  const cfg = readCfg();
+  if(!cfg?.token || !cfg?.repo) return;
+  $('gRepo').value = cfg.repo;
+  $('gPath').value = cfg.path || REPO_DEFAULTS.path;
+  $('gBranch').value = cfg.branch || 'main';
+  $('gToken').value = cfg.token;
+  $('gRemember').checked = true;
+  $('gForget').hidden = false;
+  showPanel('repo');
+  setLed('busy','reconnecting…');
+  connectRepo();
+})();
+$('lSetupNote').textContent = HAS_FSA
+  ? 'Pick where the .xlsx should live. Every change writes to that file on your computer.'
+  : 'This browser cannot write files directly. Open a workbook to load your notes, then use Download .xlsx to save. Chrome or Edge on desktop can write live.';
+if(!HAS_FSA) $('lNew').textContent='Start a new board';
+setLed('idle','not connected');
+</script>
+</body>
+</html>
